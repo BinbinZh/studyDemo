@@ -1,97 +1,140 @@
 package main
 
 import (
-	"fmt"
 	"github.com/kataras/iris"
+	"github.com/kataras/iris/middleware/logger"
+	"github.com/kataras/iris/middleware/recover"
 	"github.com/kataras/iris/mvc"
-	"github.com/kataras/iris/sessions"
 )
 
-func main() {
+//这个例子相当于
+// /hello-world/main.go
+
+//似乎是你的附加代码,必须写不值得但请记住，这个例子
+//没有使用像iris mvc这样的功能
+//Model，Persistence或View引擎,也不是Session，
+//这对于学习目的来说非常简单,可能你永远不会用到这样的,作为应用程序中任何位置的简单控制器
+
+//我们在这个示例中使用MVC
+//在提供JSON的“/ hello”路径上
+//在我的个人笔记本电脑上每20MB吞吐量大约2MB，
+//它可以接受大多数应用程序，但你可以选择
+//最适合你的是Iris，低级处理程序：性能
+//或高级控制器：在大型应用程序上更易于维护和更小的代码库。
+
+//当然你可以将所有这些都放到主函数中，它只是一个单独的函数
+//用于main_test.go。
+func newApp() *iris.Application {
 	app := iris.New()
-	app.Logger().SetLevel("debug")
-	mvc.Configure(app.Party("/basic"), basicMVC)
+	//（可选）添加两个内置处理程序
+	//可以从任何与http相关的panics中恢复
+	//并将请求记录到终端。
+	app.Use(recover.New())
+	app.Use(logger.New())
+	//控制器根路由路径"/"
+	mvc.New(app).Handle(new(ExampleController))
+	return app
+}
+
+func main() {
+	app := newApp()
+	// http://localhost:8080
+	// http://localhost:8080/ping
+		// http://localhost:8080/hello
+	// http://localhost:8080/custom_path
 	app.Run(iris.Addr(":8080"))
 }
 
-func basicMVC(app *mvc.Application) {
-	//当然，你可以在MVC应用程序中使用普通的中间件。
-	app.Router.Use(func(ctx iris.Context) {
-		ctx.Application().Logger().Infof("Path: %s", ctx.Path())
-		ctx.Next()
-	})
-	//把依赖注入，controller(s)绑定
-	//可以是一个接受iris.Context并返回单个值的函数（动态绑定）
-	//或静态结构值（service）。
-	app.Register(
-		sessions.New(sessions.Config{}).Start,
-		&prefixedLogger{prefix: "DEV"},
-	)
-	// GET: http://localhost:8080/basic
-	// GET: http://localhost:8080/basic/custom
-	app.Handle(new(basicController))
-	//所有依赖项被绑定在父 *mvc.Application
-	//被克隆到这个新子身上，父的也可以访问同一个会话。
-	// GET: http://localhost:8080/basic/sub
-	app.Party("/sub").Handle(new(basicSubController))
-}
+// ExampleController提供 ”/”，“/ping”和 “/hello”路由选项
+type ExampleController struct{}
 
-// If controller's fields (or even its functions) expecting an interface
-// but a struct value is binded then it will check
-// if that struct value implements
-// the interface and if true then it will add this to the
-// available bindings, as expected, before the server ran of course,
-// remember? Iris always uses the best possible way to reduce load
-// on serving web resources.
-//如果控制器结构体的字段（甚至其方法）需要接口
-//但结构值是绑定的，然后它会检查
-//如果该结构值实现
-//接口，如果为true，则将其添加到在服务器运行之前，正如预期的那样可用绑定，
-//记得吗？ Iris总是使用最好的方法来减少负载关于提供网络资源。
-
-type LoggerService interface {
-	Log(string)
-}
-
-type prefixedLogger struct {
-	prefix string
-}
-
-func (s *prefixedLogger) Log(msg string) {
-	fmt.Printf("%s: %s\n", s.prefix, msg)
-}
-
-type basicController struct {
-	Logger LoggerService
-	Session *sessions.Session
-}
-
-func (c *basicController) BeforeActivation(b mvc.BeforeActivation) {
-	b.Handle("GET", "/custom", "Custom")
-}
-
-func (c *basicController) AfterActivation(a mvc.AfterActivation) {
-	if a.Singleton() {
-		panic("basicController should be stateless,a request-scoped,we have a 'Session' which depends on the context.")
+// Get 服务
+// 请求方法:   GET
+// 请求资源路径: http://localhost:8080
+func (c *ExampleController) Get() mvc.Result {
+	return mvc.Response{
+		ContentType: "text/html",
+		Text:        "<h1>Welcome</h1>",
 	}
 }
 
-func (c *basicController) Get() string {
-	count := c.Session.Increment("count", 1)
-	body := fmt.Sprintf("Hello from basicController\nTotal visits from you: %d", count)
-	c.Logger.Log(body)
-	return body
+// GetPing 服务
+// 请求方法:   GET
+// 请求资源路径: http://localhost:8080/ping
+func (c *ExampleController) GetPing() string {
+	return "pong"
 }
 
-func (c *basicController) Custom() string {
-	return "custom"
+// GetHello 服务
+// 请求方法:   GET
+// 请求资源路径: http://localhost:8080/hello
+func (c *ExampleController) GetbybyaaHello() interface{} {
+	return map[string]string{"message": "Hello11111 Iris!"}
+}
+func (c *ExampleController) GetabHelloping() interface{} {
+	return map[string]string{"message": "GetHelloping Iris!"}
+}
+//在main函数调用controller之前调用一次BeforeActivation
+//在版本9之后，您还可以为特定控制器的方法添加自定义路由
+//在这里您可以注册自定义方法的处理程序
+//使用带有`ca.Router`的标准路由器做一些你可以做的事情即使不是mvc
+//并添加将绑定到控制器的字段或方法函数的输入参数的依赖项
+func (c *ExampleController) BeforeActivation(b mvc.BeforeActivation) {
+	anyMiddlewareHere := func(ctx iris.Context) {
+		ctx.Application().Logger().Warnf("Inside /custom_path")
+		ctx.Next()
+	}
+	b.Handle("GET", "/custom_path", "CustomHandlerWithoutFollowingTheNamingGuide", anyMiddlewareHere)
+	b.Handle("POST", "/qwert", "GetabHelloping", anyMiddlewareHere)
+	//甚至添加基于此控制器路由的全局中间件，
+	//在这个例子中是根“/”：
+	// b.Router().Use(myMiddleware)
 }
 
-type basicSubController struct {
-	Session *sessions.Session
+// CustomHandlerWithoutFollowingTheNamingGuide 服务
+// 请求方法:   GET
+// 请求资源路径: http://localhost:8080/custom_path
+func (c *ExampleController) CustomHandlerWithoutFollowingTheNamingGuide() string {
+	return "hello from the custom handler without following the naming guide"
 }
 
-func (c *basicSubController) Get() string {
-	count := c.Session.GetIntDefault("count", 1)
-	return fmt.Sprintf("Hello from basicSubController.\nRead-only visits count: %d", count)
+// GetUserBy 服务
+// 请求方法:   GET
+// 请求资源路径: http://localhost:8080/user/{username:string}
+//是一个保留的关键字来告诉框架你要在函数的输入参数中绑定路径参数，
+//在同一控制器中使用“Get”和“GetBy”可以实现
+//
+//func (c *ExampleController) GetUserBy(username string) mvc.Result {
+//     return mvc.View{
+//         Name: "user/username.html",
+//         Data: username,
+//     }
+// }
+
+/*
+func (c *ExampleController) Post() {}
+func (c *ExampleController) Put() {}
+func (c *ExampleController) Delete() {}
+func (c *ExampleController) Connect() {}
+func (c *ExampleController) Head() {}
+func (c *ExampleController) Patch() {}
+func (c *ExampleController) Options() {}
+func (c *ExampleController) Trace() {}
+*/
+
+/*
+func (c *ExampleController) All() {}
+//  或者
+func (c *ExampleController) Any() {}
+
+func (c *ExampleController) BeforeActivation(b mvc.BeforeActivation) {
+    // 1 -> http 请求方法
+    // 2 -> 请求路由
+    // 3 -> 此控制器的方法名称应该是该路由的处理程序
+    b.Handle("GET", "/mypath/{param}", "DoIt", optionalMiddlewareHere...)
 }
+
+//AfterActivation，所有依赖项都被设置,因此访问它们是只读
+，但仍可以添加自定义控制器或简单的标准处理程序。
+func (c *ExampleController) AfterActivation(a mvc.AfterActivation) {}
+*/

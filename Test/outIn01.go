@@ -15,9 +15,11 @@ func main() {
 }
 
 func read01(ch chan int, ch1 chan int) {
-	for x := range ch {
-		if len(ch) == 0 {
+	for  {
+		x,close := <- ch
+		if !close {
 			ch1 <- 2
+			break
 		}
 		fmt.Println("----第二步执行,  取出x的值为：" + strconv.Itoa(x))
 	}
@@ -28,4 +30,5 @@ func write01(ch chan int) {
 		fmt.Println("第一步执行,写入的值为：" + strconv.Itoa(i))
 		ch <- i
 	}
+	close(ch)
 }
