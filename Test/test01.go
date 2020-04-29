@@ -5,12 +5,12 @@ import (
 	"time"
 )
 
-func main(){
+func main() {
 	ch := make(chan int, 10)
 	ch <- 1
 	ch <- 3
 	go func() {
-		for  x := range ch{
+		for x := range ch {
 			fmt.Println(x)
 		}
 	}()
@@ -18,6 +18,7 @@ func main(){
 	//	x,ok:= <-ch
 	//	fmt.Println(x,ok)
 	//}()
-time.Sleep(1*time.Second)
+	time.Sleep(1 * time.Second)
 	fmt.Println("456")
+
 }
